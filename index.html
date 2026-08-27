@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>珮甄專用儀表板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #E8FFFF; /* 最淺色背景 */
+            color: #1f2937; /* 深灰文字確保清晰 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        /* 4種卡片底色 */
+        .card-color-1 { background-color: #ACE1E3; }
+        .card-color-2 { background-color: #A3C6CC; }
+        .card-color-3 { background-color: #77B7BF; }
+        .card-color-4 { background-color: #8FADB3; }
+
+        .widget-card {
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            transition: transform 0.2s;
+        }
+
+        .widget-card:hover {
+            transform: translateY(-2px);
+        }
+
+        /* 輸入框與按鈕的半透明樣式 */
+        .glass-input {
+            background-color: rgba(255, 255, 255, 0.6);
+            border: none;
+            color: #1f2937;
+        }
+        .glass-input:focus {
+            background-color: rgba(255, 255, 255, 0.9);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
+        }
+        
+        .glass-btn {
+            background-color: rgba(255, 255, 255, 0.5);
+            color: #1f2937;
+            transition: all 0.2s;
+        }
+        .glass-btn:hover {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* 隱藏捲軸但可滾動 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Toast 提示框 */
+        #toast {
+            position: fixed;
+            bottom: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #1f2937;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            transition: bottom 0.3s ease-in-out;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        #toast.show {
+            bottom: 24px;
+        }
+
+        /* 便利貼顏色選擇器 */
+        .color-picker {
+            display: none;
+            position: absolute;
+            top: 25px;
+            right: 0;
+            background: white;
+            padding: 4px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        .sticky-wrapper:hover .color-picker {
+            display: flex;
+            gap: 4px;
+        }
+        .color-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen p-4 md:p-8">
+
+    <!-- 標題與時間區塊 -->
+    <header class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 px-2">
+        <h1 class="text-4xl font-bold tracking-wider" style="color: #77B7BF;">珮甄專用儀表板</h1>
+        <div class="text-right">
+            <div id="current-time" class="text-3xl font-bold text-gray-700">00:00:00</div>
+            <div id="current-date" class="text-gray-600 font-medium">載入日期中...</div>
+        </div>
+    </header>
+
+    <!-- 網格排版 -->
+    <main class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+        <!-- 1. 當周天氣預報 (卡片色 1) -->
+        <section class="widget-card card-color-1">
+            <h2 class="text-xl font-bold border-b border-gray-500/30 pb-2"><i class="fas fa-cloud-sun mr-2"></i>當周天氣預報 / 新北市</h2>
+            <div class="flex flex-col gap-3 h-full justify-between mt-2">
+                <div class="flex items-center justify-between bg-white/40 p-3 rounded-lg">
+                    <div>
+                        <div class="text-sm font-bold text-gray-600" id="today-label">今天</div>
+                        <div class="text-2xl font-bold">28°C</div>
+                    </div>
+                    <i class="fas fa-sun text-4xl text-yellow-500"></i>
+                </div>
+                <div class="grid grid-cols-6 gap-2 text-center text-sm" id="forecast-container">
+                    <!-- JS 動態生成後 6 天 -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 代辦事項 (卡片色 2) -->
+        <section class="widget-card card-color-2">
+            <div class="flex justify-between items-end border-b border-gray-500/30 pb-2">
+                <h2 class="text-xl font-bold"><i class="fas fa-list-check mr-2"></i>代辦事項</h2>
+                <span id="todo-progress" class="text-sm font-bold bg-white/40 px-2 py-1 rounded">0 / 0</span>
+            </div>
+            
+            <div class="flex flex-col gap-2">
+                <input type="text" id="todo-input" placeholder="新增代辦事項..." class="glass-input w-full p-2 rounded-lg text-sm">
+                <div class="flex gap-2">
+                    <input type="date" id="todo-date" class="glass-input p-2 rounded-lg text-sm flex-1">
+                    <select id="todo-category" class="glass-input p-2 rounded-lg text-sm w-24">
+                        <option value="工作">工作</option>
+                        <option value="生活">生活</option>
+                        <option value="學習">學習</option>
+                    </select>
+                    <button onclick="addTodo()" class="glass-btn px-4 py-2 rounded-lg font-bold"><i class="fas fa-plus"></i></button>
+                </div>
+            </div>
+
+            <div id="loading-todo" class="text-center text-sm py-4 hidden"><i class="fas fa-spinner fa-spin mr-2"></i>同步中...</div>
+            
+            <ul id="todo-list" class="flex flex-col gap-2 overflow-y-auto max-h-48 no-scrollbar mt-2">
+                <!-- JS 動態載入 -->
+            </ul>
+        </section>
+
+        <!-- 3. YouTube 播放器 (卡片色 3) -->
+        <section class="widget-card card-color-3">
+            <h2 class="text-xl font-bold border-b border-gray-500/30 pb-2"><i class="fab fa-youtube mr-2"></i>影音播放區</h2>
+            <div class="flex gap-2">
+                <input type="text" id="yt-input" placeholder="貼上 YouTube 網址" class="glass-input w-full p-2 rounded-lg text-sm">
+                <button onclick="loadYouTubeVideo()" class="glass-btn px-4 py-2 rounded-lg font-bold">載入</button>
+            </div>
+            <div class="aspect-video w-full rounded-lg overflow-hidden bg-black/10 mt-2 relative">
+                <iframe id="yt-iframe" class="absolute top-0 left-0 w-full h-full" src="" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+        </section>
+
+        <!-- 4. 便利貼記事 (卡片色 4) -->
+        <section class="widget-card card-color-4">
+            <div class="flex justify-between items-center border-b border-gray-500/30 pb-2">
+                <h2 class="text-xl font-bold"><i class="fas fa-sticky-note mr-2"></i>便利貼記事</h2>
+                <button onclick="addStickyNote()" class="glass-btn px-3 py-1 rounded text-sm font-bold"><i class="fas fa-plus mr-1"></i>新增</button>
+            </div>
+            <div id="loading-sticky" class="text-center text-sm py-2 hidden"><i class="fas fa-spinner fa-spin mr-2"></i>同步中...</div>
+            <div id="sticky-container" class="flex flex-col gap-3 overflow-y-auto max-h-60 no-scrollbar mt-2 p-1">
+                <!-- JS 動態載入 -->
+            </div>
+        </section>
+
+        <!-- 5. 番茄鐘 (卡片色 1) -->
+        <section class="widget-card card-color-1">
+            <h2 class="text-xl font-bold border-b border-gray-500/30 pb-2"><i class="fas fa-stopwatch mr-2"></i>番茄鐘</h2>
+            <div class="flex flex-col items-center justify-center h-full gap-4">
+                <div id="pomodoro-display" class="text-5xl font-bold font-mono tracking-wider">25:00</div>
+                <div class="flex gap-2">
+                    <input type="number" id="pomodoro-min" value="25" min="1" max="60" class="glass-input w-16 p-2 rounded-lg text-center font-bold">
+                    <span class="py-2">分鐘</span>
+                </div>
+                <div class="flex gap-2 w-full">
+                    <button onclick="startPomodoro()" class="glass-btn flex-1 py-2 rounded-lg font-bold">開始</button>
+                    <button onclick="pausePomodoro()" class="glass-btn flex-1 py-2 rounded-lg font-bold">暫停</button>
+                    <button onclick="resetPomodoro()" class="glass-btn flex-1 py-2 rounded-lg font-bold">重置</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. 計算機 (卡片色 2) -->
+        <section class="widget-card card-color-2">
+            <h2 class="text-xl font-bold border-b border-gray-500/30 pb-2"><i class="fas fa-calculator mr-2"></i>計算機</h2>
+            <div class="flex flex-col gap-2 mt-2">
+                <input type="text" id="calc-display" disabled class="glass-input w-full p-3 rounded-lg text-right text-xl font-mono font-bold bg-white/80">
+                <div class="grid grid-cols-4 gap-2">
+                    <button onclick="calcInput('7')" class="glass-btn p-3 rounded-lg font-bold text-lg">7</button>
+                    <button onclick="calcInput('8')" class="glass-btn p-3 rounded-lg font-bold text-lg">8</button>
+                    <button onclick="calcInput('9')" class="glass-btn p-3 rounded-lg font-bold text-lg">9</button>
+                    <button onclick="calcAction('clear')" class="glass-btn p-3 rounded-lg font-bold text-lg bg-red-400/50">C</button>
+                    
+                    <button onclick="calcInput('4')" class="glass-btn p-3 rounded-lg font-bold text-lg">4</button>
+                    <button onclick="calcInput('5')" class="glass-btn p-3 rounded-lg font-bold text-lg">5</button>
+                    <button onclick="calcInput('6')" class="glass-btn p-3 rounded-lg font-bold text-lg">6</button>
+                    <button onclick="calcInput('/')" class="glass-btn p-3 rounded-lg font-bold text-lg">÷</button>
+                    
+                    <button onclick="calcInput('1')" class="glass-btn p-3 rounded-lg font-bold text-lg">1</button>
+                    <button onclick="calcInput('2')" class="glass-btn p-3 rounded-lg font-bold text-lg">2</button>
+                    <button onclick="calcInput('3')" class="glass-btn p-3 rounded-lg font-bold text-lg">3</button>
+                    <button onclick="calcInput('*')" class="glass-btn p-3 rounded-lg font-bold text-lg">×</button>
+                    
+                    <button onclick="calcInput('0')" class="glass-btn p-3 rounded-lg font-bold text-lg">0</button>
+                    <button onclick="calcInput('.')" class="glass-btn p-3 rounded-lg font-bold text-lg">.</button>
+                    <button onclick="calcAction('calculate')" class="glass-btn p-3 rounded-lg font-bold text-lg bg-blue-400/50">=</button>
+                    <div class="flex flex-col gap-2">
+                        <button onclick="calcInput('-')" class="glass-btn py-1 rounded-lg font-bold text-lg flex-1">-</button>
+                        <button onclick="calcInput('+')" class="glass-btn py-1 rounded-lg font-bold text-lg flex-1">+</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. 匯率換算 (卡片色 3) -->
+        <section class="widget-card card-color-3 md:col-span-2">
+            <h2 class="text-xl font-bold border-b border-gray-500/30 pb-2"><i class="fas fa-coins mr-2"></i>匯率換算 (參考)</h2>
+            <div class="flex flex-col md:flex-row gap-4 h-full items-center mt-2 justify-center">
+                <div class="flex items-center gap-2 w-full md:w-auto bg-white/30 p-3 rounded-lg">
+                    <span class="font-bold whitespace-nowrap">人民幣 (CNY)</span>
+                    <input type="number" id="cny-input" class="glass-input w-24 p-2 rounded-lg text-center" placeholder="金額" oninput="convertCurrency('cny')">
+                    <i class="fas fa-arrow-right text-gray-500"></i>
+                    <span id="cny-result" class="font-bold min-w-[80px]">0 TWD</span>
+                </div>
+                <div class="flex items-center gap-2 w-full md:w-auto bg-white/30 p-3 rounded-lg">
+                    <span class="font-bold whitespace-nowrap">日幣 (JPY)</span>
+                    <input type="number" id="jpy-input" class="glass-input w-24 p-2 rounded-lg text-center" placeholder="金額" oninput="convertCurrency('jpy')">
+                    <i class="fas fa-arrow-right text-gray-500"></i>
+                    <span id="jpy-result" class="font-bold min-w-[80px]">0 TWD</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8. 常用網頁連結 (卡片色 4) -->
+        <section class="widget-card card-color-4 md:col-span-2">
+            <div class="flex justify-between items-center border-b border-gray-500/30 pb-2">
+                <h2 class="text-xl font-bold"><i class="fas fa-link mr-2"></i>常用網頁連結</h2>
+                <button onclick="toggleLinkModal()" class="glass-btn px-3 py-1 rounded text-sm font-bold">編輯連結</button>
+            </div>
+            <div id="links-container" class="flex flex-wrap gap-4 mt-4 justify-center md:justify-start">
+                <!-- JS 動態載入書籤 -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 書籤編輯 Modal -->
+    <div id="link-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl w-96 shadow-xl max-w-[90%]">
+            <h3 class="text-lg font-bold mb-4">新增/編輯連結</h3>
+            <div class="flex flex-col gap-3">
+                <input type="text" id="link-name" placeholder="網站名稱 (如: Google)" class="border p-2 rounded w-full">
+                <input type="url" id="link-url" placeholder="網址 (如: https://google.com)" class="border p-2 rounded w-full">
+                <div class="flex justify-end gap-2 mt-2">
+                    <button onclick="toggleLinkModal()" class="px-4 py-2 bg-gray-200 rounded font-bold">取消</button>
+                    <button onclick="saveLink()" class="px-4 py-2 bg-blue-500 text-white rounded font-bold">儲存</button>
+                </div>
+                <div class="mt-4 border-t pt-4">
+                    <h4 class="text-sm font-bold text-gray-500 mb-2">已儲存的連結 (點擊刪除)</h4>
+                    <ul id="modal-link-list" class="flex flex-col gap-2 max-h-32 overflow-y-auto"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 提示區 -->
+    <div id="toast">提示訊息</div>
+
+    <script>
+        // ================= GAS API 網址設定 =================
+        const TODO_GAS_URL = 'https://script.google.com/macros/s/AKfycbzlxFf-zhgugc2L1DSaueA7Gwt8HR4-8A9o3pVnecx5pOyuiNbg_V63ve5qVAb_eBoa/exec';
+        const STICKY_GAS_URL = 'https://script.google.com/macros/s/AKfycbyyqGcq18HSubYag4saKmhskqtXvESNCSeS1EVmiOC_ADP9PIK77k9ZS4VN_Me4Zxlp/exec';
+        
+        // 便利貼顏色盤
+        const stickyColors = ['#FEF3C7', '#D1FAE5', '#DBEAFE', '#FCE7F3', '#F3F4F6']; // 黃, 綠, 藍, 粉, 灰
+
+        // ================= Toast 提示系統 =================
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ================= 1. 時間與日期 =================
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('zh-TW', { hour12: false });
+            const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+            const dateString = now.toLocaleDateString('zh-TW', dateOptions);
+            
+            document.getElementById('current-time').innerText = timeString;
+            document.getElementById('current-date').innerText = dateString;
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // ================= 2. 7天自動天氣預報 (模擬UI) =================
+        function render7DaysWeather() {
+            const container = document.getElementById('forecast-container');
+            const today = new Date();
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            const icons = ['fa-sun', 'fa-cloud-sun', 'fa-cloud', 'fa-cloud-rain', 'fa-sun', 'fa-cloud'];
+            const colors = ['text-yellow-500', 'text-orange-400', 'text-gray-500', 'text-blue-500', 'text-yellow-500', 'text-gray-500'];
+
+            let html = '';
+            for(let i=1; i<=6; i++) {
+                let nextDate = new Date(today);
+                nextDate.setDate(today.getDate() + i);
+                let dayName = weekdays[nextDate.getDay()];
+                let dateStr = `${nextDate.getMonth()+1}/${nextDate.getDate()}`;
+                
+                html += `
+                    <div class="flex flex-col items-center bg-white/30 rounded p-1">
+                        <span class="text-xs font-bold">${dayName}</span>
+                        <span class="text-[10px] text-gray-600 mb-1">${dateStr}</span>
+                        <i class="fas ${icons[i%6]} ${colors[i%6]} mb-1"></i>
+                        <span class="text-xs">${25 + (i%4)}°</span>
+                    </div>
+                `;
+            }
+            container.innerHTML = html;
+        }
+        render7DaysWeather();
+
+        // ================= 3. 代辦事項 (連接 Google Sheets) =================
+        let todos = [];
+        
+        async function fetchTodos() {
+            document.getElementById('loading-todo').classList.remove('hidden');
+            try {
+                const res = await fetch(TODO_GAS_URL);
+                if (!res.ok) throw new Error('網路回應異常');
+                todos = await res.json();
+                renderTodos();
+            } catch (err) {
+                console.error("fetchTodos Error:", err);
+                showToast("代辦事項讀取失敗，請確認試算表權限。");
+            }
+            document.getElementById('loading-todo').classList.add('hidden');
+        }
+
+        async function addTodo() {
+            const input = document.getElementById('todo-input');
+            const dateInput = document.getElementById('todo-date');
+            const catInput = document.getElementById('todo-category');
+            const text = input.value.trim();
+            const date = dateInput.value;
+            const category = catInput.value;
+            
+            if (text) {
+                const newTodo = { id: Date.now().toString(), text, date, category, completed: false };
+                input.value = '';
+                dateInput.value = '';
+                
+                // 樂觀更新 UI
+                todos.push(newTodo);
+                renderTodos();
+                
+                try {
+                    await fetch(TODO_GAS_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'add', ...newTodo })
+                    });
+                } catch (err) {
+                    showToast("新增失敗");
+                    fetchTodos(); // 失敗則重整
+                }
+            } else {
+                showToast("請輸入代辦內容");
+            }
+        }
+
+        async function toggleTodo(id) {
+            const todo = todos.find(t => t.id === id);
+            if(todo) {
+                todo.completed = !todo.completed;
+                renderTodos(); // 樂觀更新 UI
+                
+                try {
+                    await fetch(TODO_GAS_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'toggle', id: id, status: todo.completed })
+                    });
+                } catch(err) {
+                    showToast("狀態更新失敗");
+                    fetchTodos();
+                }
+            }
+        }
+
+        async function deleteTodo(id) {
+            todos = todos.filter(t => t.id !== id);
+            renderTodos(); // 樂觀更新 UI
+            
+            try {
+                await fetch(TODO_GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete', id: id })
+                });
+            } catch(err) {
+                showToast("刪除失敗");
+                fetchTodos();
+            }
+        }
+
+        function renderTodos() {
+            const list = document.getElementById('todo-list');
+            const progress = document.getElementById('todo-progress');
+            list.innerHTML = '';
+            
+            let completedCount = 0;
+
+            const categoryColors = { '工作': 'bg-red-100 text-red-700', '生活': 'bg-green-100 text-green-700', '學習': 'bg-blue-100 text-blue-700' };
+
+            todos.forEach(todo => {
+                if(todo.completed) completedCount++;
+                const catStyle = categoryColors[todo.category] || 'bg-gray-100 text-gray-700';
+                
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between p-2 bg-white/50 rounded-lg group';
+                li.innerHTML = `
+                    <div class="flex items-center gap-3 flex-1 overflow-hidden">
+                        <input type="checkbox" ${todo.completed ? 'checked' : ''} onchange="toggleTodo('${todo.id}')" class="w-4 h-4 cursor-pointer accent-[#77B7BF]">
+                        <div class="flex flex-col">
+                            <span class="text-sm font-bold ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}">${todo.text}</span>
+                            <div class="flex gap-2 items-center text-[10px] mt-0.5">
+                                <span class="px-1.5 rounded-sm ${catStyle}">${todo.category}</span>
+                                <span class="text-gray-500"><i class="far fa-calendar-alt mr-1"></i>${todo.date || '無期限'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="deleteTodo('${todo.id}')" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                `;
+                list.appendChild(li);
+            });
+            
+            progress.innerText = `${completedCount} / ${todos.length}`;
+        }
+        fetchTodos();
+
+        // ================= 4. 便利貼 (連接 Google Sheets, 支援顏色) =================
+        let stickyNotes = [];
+        let noteTimeout = {};
+
+        async function fetchStickyNotes() {
+            document.getElementById('loading-sticky').classList.remove('hidden');
+            try {
+                const res = await fetch(STICKY_GAS_URL);
+                stickyNotes = await res.json();
+                renderStickyNotes();
+            } catch (err) {
+                console.error(err);
+                showToast("便利貼讀取失敗");
+            }
+            document.getElementById('loading-sticky').classList.add('hidden');
+        }
+
+        async function addStickyNote() {
+            const now = new Date();
+            const timeStr = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const newNote = { 
+                id: Date.now().toString(), 
+                time: timeStr, 
+                text: '',
+                color: stickyColors[0] // 預設黃色
+            };
+            
+            stickyNotes.unshift(newNote);
+            renderStickyNotes();
+            
+            try {
+                await fetch(STICKY_GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'add', ...newNote })
+                });
+            } catch(err) {
+                showToast("新增便利貼失敗");
+            }
+        }
+
+        function updateStickyLocal(id, newText) {
+            const note = stickyNotes.find(n => n.id === id);
+            if(note) {
+                note.text = newText;
+                
+                clearTimeout(noteTimeout[id]);
+                noteTimeout[id] = setTimeout(async () => {
+                    try {
+                        await fetch(STICKY_GAS_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({ action: 'update', id: id, text: newText })
+                        });
+                    } catch(err) {
+                        showToast("儲存失敗，請檢查網路");
+                    }
+                }, 1000);
+            }
+        }
+
+        async function changeStickyColor(id, color) {
+            const note = stickyNotes.find(n => n.id === id);
+            if(note) {
+                note.color = color;
+                renderStickyNotes(); // 重新渲染套用顏色
+                try {
+                    await fetch(STICKY_GAS_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action: 'updateColor', id: id, color: color })
+                    });
+                } catch(err) {
+                    showToast("顏色變更失敗");
+                }
+            }
+        }
+
+        async function deleteStickyNote(id) {
+            stickyNotes = stickyNotes.filter(n => n.id !== id);
+            renderStickyNotes();
+            try {
+                await fetch(STICKY_GAS_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'delete', id: id })
+                });
+            } catch(err) {
+                showToast("刪除失敗");
+            }
+        }
+
+        function renderStickyNotes() {
+            const container = document.getElementById('sticky-container');
+            container.innerHTML = '';
+            
+            stickyNotes.forEach(note => {
+                const wrap = document.createElement('div');
+                wrap.className = 'sticky-wrapper relative flex flex-col rounded-lg p-3 shadow-sm border border-black/5';
+                wrap.style.backgroundColor = note.color || stickyColors[0];
+                
+                // 產生顏色選擇器 HTML
+                let colorPickerHtml = `<div class="color-picker">`;
+                stickyColors.forEach(c => {
+                    colorPickerHtml += `<div class="color-dot" style="background-color: ${c};" onclick="changeStickyColor('${note.id}', '${c}')"></div>`;
+                });
+                colorPickerHtml += `</div>`;
+
+                wrap.innerHTML = `
+                    <div class="flex justify-between items-center mb-1 text-[10px] text-gray-500">
+                        <span><i class="far fa-clock mr-1"></i>${note.time}</span>
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-palette cursor-pointer hover:text-gray-800"></i>
+                            <i class="fas fa-times cursor-pointer hover:text-red-500" onclick="deleteStickyNote('${note.id}')"></i>
+                        </div>
+                    </div>
+                    ${colorPickerHtml}
+                    <textarea class="w-full bg-transparent resize-none outline-none text-sm font-medium text-gray-800" 
+                        rows="3" placeholder="記下隨機靈感..." 
+                        oninput="updateStickyLocal('${note.id}', this.value)">${note.text}</textarea>
+                `;
+                container.appendChild(wrap);
+            });
+        }
+        fetchStickyNotes();
+
+        // ================= 5. YouTube 播放器 =================
+        const DEFAULT_YT = "https://youtu.be/x73mJxlhiz0?si=jBKpTiwpSv0dNhgW";
+
+        function extractVideoID(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        function loadYouTubeVideo() {
+            const inputUrl = document.getElementById('yt-input').value;
+            let videoId = extractVideoID(inputUrl);
+            
+            if (videoId) {
+                document.getElementById('yt-iframe').src = `https://www.youtube.com/embed/${videoId}`;
+                localStorage.setItem('savedYtUrl', inputUrl);
+                showToast("影片載入成功");
+            } else {
+                showToast("無效的 YouTube 網址，請重新檢查");
+            }
+        }
+
+        // 初始化 YouTube
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedYt = localStorage.getItem('savedYtUrl');
+            if(savedYt) {
+                document.getElementById('yt-input').value = savedYt;
+                document.getElementById('yt-iframe').src = `https://www.youtube.com/embed/${extractVideoID(savedYt)}`;
+            } else {
+                document.getElementById('yt-iframe').src = `https://www.youtube.com/embed/${extractVideoID(DEFAULT_YT)}`;
+            }
+        });
+
+        // ================= 6. 番茄鐘 =================
+        let pomodoroInterval;
+        let timeLeft = 25 * 60;
+        let isTimerRunning = false;
+
+        function updatePomodoroDisplay() {
+            const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const s = (timeLeft % 60).toString().padStart(2, '0');
+            document.getElementById('pomodoro-display').innerText = `${m}:${s}`;
+        }
+
+        function startPomodoro() {
+            if (isTimerRunning) return;
+            isTimerRunning = true;
+            
+            const inputMin = parseInt(document.getElementById('pomodoro-min').value);
+            if (timeLeft === 25 * 60 && inputMin !== 25) {
+                timeLeft = inputMin * 60;
+            }
+
+            pomodoroInterval = setInterval(() => {
+                if (timeLeft > 0) {
+                    timeLeft--;
+                    updatePomodoroDisplay();
+                } else {
+                    clearInterval(pomodoroInterval);
+                    isTimerRunning = false;
+                    showToast("時間到囉！休息一下吧！");
+                }
+            }, 1000);
+        }
+
+        function pausePomodoro() {
+            clearInterval(pomodoroInterval);
+            isTimerRunning = false;
+        }
+
+        function resetPomodoro() {
+            clearInterval(pomodoroInterval);
+            isTimerRunning = false;
+            const inputMin = parseInt(document.getElementById('pomodoro-min').value) || 25;
+            timeLeft = inputMin * 60;
+            updatePomodoroDisplay();
+        }
+
+        // ================= 7. 計算機 =================
+        let calcValue = '';
+        function calcInput(val) {
+            calcValue += val;
+            document.getElementById('calc-display').value = calcValue;
+        }
+        function calcAction(action) {
+            if (action === 'clear') {
+                calcValue = '';
+                document.getElementById('calc-display').value = '';
+            } else if (action === 'calculate') {
+                try {
+                    // 安全計算替換
+                    let safeCalc = calcValue.replace(/[^-()\d/*+.]/g, '');
+                    const result = new Function('return ' + safeCalc)();
+                    calcValue = String(result);
+                    document.getElementById('calc-display').value = calcValue;
+                } catch (e) {
+                    document.getElementById('calc-display').value = 'Error';
+                    calcValue = '';
+                }
+            }
+        }
+
+        // ================= 8. 匯率換算 =================
+        const RATE_CNY = 4.4;
+        const RATE_JPY = 0.21;
+        function convertCurrency(type) {
+            if (type === 'cny') {
+                const val = document.getElementById('cny-input').value;
+                document.getElementById('cny-result').innerText = (val * RATE_CNY).toFixed(0) + ' TWD';
+            } else {
+                const val = document.getElementById('jpy-input').value;
+                document.getElementById('jpy-result').innerText = (val * RATE_JPY).toFixed(0) + ' TWD';
+            }
+        }
+
+        // ================= 9. 常用連結書籤 =================
+        let bookmarks = JSON.parse(localStorage.getItem('myBookmarks')) || [
+            { name: 'Google', url: 'https://google.com' },
+            { name: 'Gmail', url: 'https://mail.google.com' }
+        ];
+
+        function renderBookmarks() {
+            const container = document.getElementById('links-container');
+            const modalList = document.getElementById('modal-link-list');
+            container.innerHTML = '';
+            modalList.innerHTML = '';
+
+            bookmarks.forEach((bm, index) => {
+                // 首頁按鈕
+                const a = document.createElement('a');
+                a.href = bm.url;
+                a.target = "_blank";
+                a.className = "flex flex-col items-center gap-1 group hover:-translate-y-1 transition-transform";
+                a.innerHTML = `
+                    <div class="w-12 h-12 rounded-full bg-white/60 flex items-center justify-center shadow group-hover:bg-white transition-colors text-xl text-gray-700">
+                        ${bm.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span class="text-xs font-bold text-gray-700">${bm.name}</span>
+                `;
+                container.appendChild(a);
+
+                // Modal 列表
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center p-2 bg-gray-50 rounded";
+                li.innerHTML = `
+                    <span class="text-sm font-bold truncate max-w-[200px]">${bm.name}</span>
+                    <button onclick="deleteLink(${index})" class="text-red-500 hover:bg-red-100 px-2 rounded"><i class="fas fa-trash"></i></button>
+                `;
+                modalList.appendChild(li);
+            });
+        }
+
+        function toggleLinkModal() {
+            const modal = document.getElementById('link-modal');
+            modal.classList.toggle('hidden');
+            modal.classList.toggle('flex');
+        }
+
+        function saveLink() {
+            const name = document.getElementById('link-name').value;
+            const url = document.getElementById('link-url').value;
+            if (name && url) {
+                bookmarks.push({ name, url });
+                localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
+                document.getElementById('link-name').value = '';
+                document.getElementById('link-url').value = '';
+                renderBookmarks();
+                showToast("連結已儲存");
+            } else {
+                showToast("請填寫名稱與網址");
+            }
+        }
+
+        function deleteLink(index) {
+            bookmarks.splice(index, 1);
+            localStorage.setItem('myBookmarks', JSON.stringify(bookmarks));
+            renderBookmarks();
+            showToast("連結已刪除");
+        }
+
+        // 初始化書籤
+        renderBookmarks();
+
+    </script>
+</body>
+</html>
